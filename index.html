@@ -51,6 +51,18 @@
     .btn:hover {
       background: #008066;
     }
+    #calibration-box {
+      text-align: center;
+      padding: 1rem;
+      margin-top: 1rem;
+      display: none;
+      background-color: #1e2a38;
+      border-radius: 10px;
+    }
+    #proceed-btn {
+      background: #ffa500;
+      margin-top: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -62,14 +74,19 @@
   <div class="container">
     <h3>Status: <span id="statusLevel">Unknown</span></h3>
     <canvas id="tempChart" height="120"></canvas>
-    <button class="btn" onclick="calibrate()">Calibrate</button>
+    <button class="btn" onclick="showCalibrationBox()">Calibrate</button>
+
+    <div id="calibration-box">
+      <p>📌 Place all sensors together for calibration.<br>Waiting 5 seconds for auto calibration...</p>
+    </div>
   </div>
 
   <script>
     const mqttBroker = "wss://broker.hivemq.com:8884/mqtt";
     const client = mqtt.connect(mqttBroker);
 
-    let sensorData = {}; // { sensor1: temp, sensor2: temp }
+    let sensorData = {};
+    let calibrationOffsets = {};
 
     const ctx = document.getElementById("tempChart").getContext("2d");
     const chart = new Chart(ctx, {
@@ -117,12 +134,20 @@
     });
 
     function updateChart() {
-      chart.data.labels = Object.keys(sensorData);
-      chart.data.datasets[0].data = Object.values(sensorData);
+      const sortedKeys = Object.keys(sensorData).sort((a, b) => {
+        const aNum = parseInt(a.match(/\d+/));
+        const bNum = parseInt(b.match(/\d+/));
+        return aNum - bNum;
+      });
+
+      chart.data.labels = sortedKeys;
+      chart.data.datasets[0].data = sortedKeys.map(key => {
+        const offset = calibrationOffsets[key] || 0;
+        return sensorData[key] + offset;
+      });
       chart.update();
 
-      // Update status level display
-      const values = Object.values(sensorData);
+      const values = sortedKeys.map(key => sensorData[key] + (calibrationOffsets[key] || 0));
       if (values.length > 0) {
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
         let status = "Low";
@@ -132,16 +157,37 @@
       }
     }
 
-    function calibrate() {
-      alert("Calibration feature coming soon!");
+    function showCalibrationBox() {
+      const box = document.getElementById("calibration-box");
+      box.style.display = "block";
+
+      setTimeout(() => {
+        autoCalibrate();
+        box.innerHTML = "✅ Calibration done successfully!";
+        setTimeout(() => {
+          box.style.display = "none";
+        }, 3000);
+      }, 5000); // Wait 5 seconds before calibrating
+    }
+
+    function autoCalibrate() {
+      const keys = Object.keys(sensorData);
+      if (keys.length === 0) return;
+
+      const temps = keys.map(k => sensorData[k]);
+      const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+
+      keys.forEach(k => {
+        calibrationOffsets[k] = avg - sensorData[k];
+      });
+
+      updateChart();
     }
 
     client.on("connect", () => {
       document.getElementById("mqtt-status").innerText = "MQTT: Connected";
       document.getElementById("mqtt-status").classList.remove("disconnected");
       document.getElementById("mqtt-status").classList.add("connected");
-
-      // Subscribe to wildcard to listen to any sensor
       client.subscribe("tempro/+/temperature");
     });
 
@@ -168,4 +214,3 @@
   </script>
 </body>
 </html>
-
