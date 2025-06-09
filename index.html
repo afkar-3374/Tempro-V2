@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tempro v2 – Live Temperature Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      background-color: #0e1621;
+      color: #e2f1f8;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      background-color: #1e2a38;
+    }
+    .status {
+      font-size: 1.2rem;
+    }
+    .connected {
+      color: #00ff88;
+    }
+    .disconnected {
+      color: #ff4d4d;
+    }
+    .container {
+      padding: 1rem 2rem;
+    }
+    canvas {
+      background-color: #121c2b;
+      padding: 1rem;
+      border-radius: 10px;
+    }
+    .btn {
+      display: block;
+      margin: 2rem auto;
+      background: #00b386;
+      color: white;
+      border: none;
+      font-size: 1rem;
+      padding: 0.8rem 2rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .btn:hover {
+      background: #008066;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>🌡️ Tempro v2 - Live Temperature Monitor</h2>
+    <div id="mqtt-status" class="status disconnected">MQTT: Disconnected</div>
+  </header>
+
+  <div class="container">
+    <h3>Status: <span id="statusLevel">Unknown</span></h3>
+    <canvas id="tempChart" height="120"></canvas>
+    <button class="btn" onclick="calibrate()">Calibrate</button>
+  </div>
+
+  <script>
+    const mqttBroker = "wss://broker.hivemq.com:8884/mqtt";
+    const client = mqtt.connect(mqttBroker);
+
+    let sensorData = {}; // { sensor1: temp, sensor2: temp }
+
+    const ctx = document.getElementById("tempChart").getContext("2d");
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "Temperature (°C)",
+          data: [],
+          backgroundColor: "rgba(0, 255, 255, 0.1)",
+          borderColor: "#00ffff",
+          borderWidth: 2,
+          pointBackgroundColor: "#ffa500",
+          tension: 0.4,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            min: 20,
+            max: 40,
+            title: {
+              display: true,
+              text: "Temperature (°C)",
+              color: "#aaa"
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: "Sensor ID",
+              color: "#aaa"
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: "#ccc"
+            }
+          }
+        }
+      }
+    });
+
+    function updateChart() {
+      chart.data.labels = Object.keys(sensorData);
+      chart.data.datasets[0].data = Object.values(sensorData);
+      chart.update();
+
+      // Update status level display
+      const values = Object.values(sensorData);
+      if (values.length > 0) {
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        let status = "Low";
+        if (avg > 29) status = "Medium";
+        if (avg > 32) status = "High";
+        document.getElementById("statusLevel").innerText = status;
+      }
+    }
+
+    function calibrate() {
+      alert("Calibration feature coming soon!");
+    }
+
+    client.on("connect", () => {
+      document.getElementById("mqtt-status").innerText = "MQTT: Connected";
+      document.getElementById("mqtt-status").classList.remove("disconnected");
+      document.getElementById("mqtt-status").classList.add("connected");
+
+      // Subscribe to wildcard to listen to any sensor
+      client.subscribe("tempro/+/temperature");
+    });
+
+    client.on("message", (topic, message) => {
+      const parts = topic.split("/");
+      const sensorId = parts[1];
+      const temp = parseFloat(message.toString());
+
+      if (!isNaN(temp)) {
+        sensorData[sensorId] = temp;
+        updateChart();
+      }
+    });
+
+    client.on("error", () => {
+      document.getElementById("mqtt-status").innerText = "MQTT: Error";
+    });
+
+    client.on("offline", () => {
+      document.getElementById("mqtt-status").innerText = "MQTT: Offline";
+      document.getElementById("mqtt-status").classList.remove("connected");
+      document.getElementById("mqtt-status").classList.add("disconnected");
+    });
+  </script>
+</body>
+</html>
+
