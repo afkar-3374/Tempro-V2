@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempro Dashboard - Unit 3</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Paho MQTT client for browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+    <!-- Inter Font -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            @apply bg-gray-900 text-white;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col min-h-screen">
+
+    <header class="bg-gray-800 shadow-lg py-4">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">Tempro Dashboard - Unit 3</h1>
+        </div>
+    </header>
+
+    <main class="flex-grow p-8 flex items-center justify-center">
+        <!-- Main Content Card -->
+        <div class="max-w-xl w-full bg-gray-800 rounded-3xl p-8 shadow-2xl">
+            <!-- Individual Unit Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Temperature Card -->
+                <div class="bg-gray-900 p-6 rounded-2xl shadow-inner border border-gray-700 flex flex-col items-center justify-center text-center transition-transform duration-200 hover:scale-105">
+                    <h2 class="text-xl font-semibold text-gray-200">Temperature</h2>
+                    <div class="text-5xl font-bold text-blue-400 mt-4" id="unit-3-temp">-- °C</div>
+                </div>
+
+                <!-- Humidity Card -->
+                <div class="bg-gray-900 p-6 rounded-2xl shadow-inner border border-gray-700 flex flex-col items-center justify-center text-center transition-transform duration-200 hover:scale-105">
+                    <h2 class="text-xl font-semibold text-gray-200">Humidity</h2>
+                    <div class="text-5xl font-bold text-teal-400 mt-4" id="unit-3-hum">-- %</div>
+                </div>
+            </div>
+            
+            <div class="mt-6 text-sm text-gray-400 text-right" id="last-updated">
+                Last updated: --
+            </div>
+        </div>
+    </main>
+
+    <footer class="py-4 text-center text-gray-400 text-sm">
+        <p>&copy; 2024 Tempro Dashboard. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // --- MQTT Client Configuration ---
+        const mqttServer = "broker.hivemq.com";
+        const mqttPort = 8884; // Using wss:// protocol for secure WebSocket connection
+        const mqttClientId = "web-client-" + Math.random().toString(16).substr(2, 8);
+        const unitId = 'unit-3';
+        
+        let client;
+
+        // Data storage for live updates
+        const sensorData = { temp: 0, humidity: 0 };
+
+        // --- UI Update Functions ---
+        function updateUI() {
+            const tempElement = document.getElementById(`${unitId}-temp`);
+            const humElement = document.getElementById(`${unitId}-hum`);
+            
+            tempElement.textContent = sensorData.temp !== 0 ? `${sensorData.temp.toFixed(1)} °C` : '-- °C';
+            humElement.textContent = sensorData.humidity !== 0 ? `${sensorData.humidity.toFixed(1)} %` : '-- %';
+            
+            updateLastUpdatedTime();
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('last-updated').textContent = `Last updated: ${dateString} - ${timeString}`;
+        }
+
+        // --- MQTT Connection & Message Handling ---
+        function connectMQTT() {
+            console.log("Connecting to MQTT broker...");
+            client = new Paho.Client(mqttServer, Number(mqttPort), mqttClientId);
+
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+
+            client.connect({
+                useSSL: true,
+                onSuccess: onConnect,
+                onFailure: onFailure
+            });
+        }
+
+        function onConnect() {
+            console.log("Connected to MQTT broker.");
+            // Subscribe to the specific unit's topics
+            const mqttUnit = unitId.split('-').join('');
+            client.subscribe(`tempro/${mqttUnit}/temp`);
+            client.subscribe(`tempro/${mqttUnit}/humidity`);
+        }
+
+        function onFailure(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connection failed: " + responseObject.errorMessage);
+                setTimeout(connectMQTT, 5000); // Retry connection
+            }
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connection lost: " + responseObject.errorMessage);
+                sensorData.temp = 0;
+                sensorData.humidity = 0;
+                updateUI();
+                setTimeout(connectMQTT, 5000); // Attempt to reconnect
+            }
+        }
+
+        function onMessageArrived(message) {
+            const topic = message.destinationName;
+            const payload = message.payloadString;
+            const [project, unitTopic, type] = topic.split('/');
+            
+            const value = parseFloat(payload);
+            if (!isNaN(value)) {
+                if (type === 'temp') {
+                    sensorData.temp = value;
+                } else if (type === 'humidity') {
+                    sensorData.humidity = value;
+                }
+                updateUI();
+            }
+        }
+
+        // Initialize the app
+        window.onload = function() {
+            connectMQTT();
+        }
+    </script>
+</body>
+</html>
