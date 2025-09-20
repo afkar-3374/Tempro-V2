@@ -70,8 +70,10 @@
             const tempElement = document.getElementById(`${unitId}-temp`);
             const humElement = document.getElementById(`${unitId}-hum`);
             
-            tempElement.textContent = sensorData.temp !== 0 ? `${sensorData.temp.toFixed(1)} °C` : '-- °C';
-            humElement.textContent = sensorData.humidity !== 0 ? `${sensorData.humidity.toFixed(1)} %` : '-- %';
+            // If sensorData.temp is a valid number, display it. Otherwise, show "Read Fail".
+            tempElement.textContent = !isNaN(sensorData.temp) && sensorData.temp !== 0 ? `${sensorData.temp.toFixed(1)} °C` : 'Read Fail';
+            // If sensorData.humidity is a valid number, display it. Otherwise, show "Read Fail".
+            humElement.textContent = !isNaN(sensorData.humidity) && sensorData.humidity !== 0 ? `${sensorData.humidity.toFixed(1)} %` : 'Read Fail';
             
             updateLastUpdatedTime();
         }
@@ -116,8 +118,8 @@
         function onConnectionLost(responseObject) {
             if (responseObject.errorCode !== 0) {
                 console.log("Connection lost: " + responseObject.errorMessage);
-                sensorData.temp = 0;
-                sensorData.humidity = 0;
+                sensorData.temp = 'Read Fail';
+                sensorData.humidity = 'Read Fail';
                 updateUI();
                 setTimeout(connectMQTT, 5000); // Attempt to reconnect
             }
@@ -135,8 +137,15 @@
                 } else if (type === 'humidity') {
                     sensorData.humidity = value;
                 }
-                updateUI();
+            } else {
+                // Set to 'Read Fail' if the payload is not a valid number
+                if (type === 'temp') {
+                    sensorData.temp = 'Read Fail';
+                } else if (type === 'humidity') {
+                    sensorData.humidity = 'Read Fail';
+                }
             }
+            updateUI();
         }
 
         // Initialize the app
