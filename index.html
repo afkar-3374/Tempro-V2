@@ -1,296 +1,267 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tempro v2 - Live Temperature Monitor</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    :root {
-      --bg: #0e0b1f;
-      --card: #1e1b35;
-      --accent: #7c3aed;
-      --accent-light: #a78bfa;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-    }
-
-    body.light {
-      --bg: #e0f2ff;
-      --card: #cce7ff;
-      --accent: #1e3a8a;
-      --accent-light: #2563eb;
-      --text: #0f172a;
-      --text-muted: #334155;
-    }
-
-    body {
-      margin: 0;
-      font-family: "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    header {
-      background: var(--card);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 2rem;
-      border-bottom: 1px solid #ccc;
-    }
-
-    header h2 {
-      font-size: 1.25rem;
-      font-weight: 600;
-    }
-
-    .status {
-      font-size: 0.95rem;
-      font-weight: 500;
-    }
-
-    .connected { color: #16a34a; }
-    .disconnected { color: #dc2626; }
-
-    .theme-toggle {
-      cursor: pointer;
-      padding: 0.4rem 0.8rem;
-      background-color: var(--accent);
-      border: none;
-      border-radius: 5px;
-      color: white;
-      margin-left: 1rem;
-    }
-
-    .container {
-      padding: 2rem;
-      max-width: 1200px;
-      margin: auto;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 2rem;
-    }
-
-    .left-panel { flex: 2; min-width: 300px; }
-    .right-panel { flex: 1; min-width: 260px; }
-
-    h3 {
-      font-size: 1rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      margin-bottom: 1rem;
-    }
-
-    .chart-box {
-      background-color: var(--card);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    canvas {
-      width: 100% !important;
-      height: 400px !important;
-    }
-
-    .sensor-card {
-      background: var(--card);
-      border-radius: 8px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-      font-size: 0.95rem;
-    }
-
-    .sensor-id {
-      font-weight: bold;
-      color: var(--accent-light);
-      margin-bottom: 0.5rem;
-    }
-
-    .card-row {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 1rem;
-    }
-
-    .card-row .sensor-card {
-      flex: 1;
-      min-width: 140px;
-    }
-
-    @media (max-width: 800px) {
-      .container { flex-direction: column; }
-      .right-panel { order: -1; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempro Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN for graphing -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <!-- Paho MQTT client for browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+    <!-- Inter Font -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            @apply bg-gray-900 text-white;
+        }
+        .online-status {
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+            }
+        }
+    </style>
 </head>
-<body>
-  <header>
-    <h2>🌡️ Tempro v2 - Live Temperature Monitor</h2>
-    <div>
-      <span id="mqtt-status" class="status disconnected">MQTT: Disconnected</span>
-      <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
-    </div>
-  </header>
+<body class="bg-gray-900 text-white flex flex-col min-h-screen">
 
-  <div class="container">
-    <div class="left-panel">
-      <h3>Status: <span id="statusLevel">Unknown</span></h3>
-      <div class="card-row">
-        <div id="meanCard" class="sensor-card">
-          <div class="sensor-id">📈 Mean Temperature</div>
-          <div>Temperature: <b>-- °C</b></div>
+    <header class="bg-gray-800 shadow-lg py-4">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">Tempro Dashboard</h1>
         </div>
-        <div id="medianCard" class="sensor-card">
-          <div class="sensor-id">📊 Median Temperature</div>
-          <div>Temperature: <b>-- °C</b></div>
+    </header>
+
+    <main class="flex-grow p-8 flex items-center justify-center">
+        <!-- Main Content Card -->
+        <div class="max-w-7xl w-full bg-gray-800 rounded-3xl p-8 shadow-2xl">
+            <!-- Dashboard Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Live Sensor Temperatures Graph -->
+                <div class="lg:col-span-2 bg-gray-900 p-6 rounded-2xl shadow-inner border border-gray-700">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-semibold text-gray-200">Live Sensor Temperatures</h2>
+                        <div class="flex items-center text-green-400">
+                            <span class="online-status w-2 h-2 rounded-full mr-2 bg-green-500"></span>
+                            <span class="text-sm font-medium">Live Temperatures</span>
+                        </div>
+                    </div>
+                    <div class="h-96">
+                        <canvas id="tempChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- Online Sensors Section -->
+                <div class="lg:col-span-1 bg-gray-900 p-6 rounded-2xl shadow-inner border border-gray-700">
+                    <div class="border-b border-gray-700 pb-4 mb-4">
+                        <h2 class="text-2xl font-semibold text-gray-200">Online Sensors</h2>
+                    </div>
+                    <div id="online-sensors-list" class="space-y-4">
+                        <!-- Sensor status cards will be dynamically added here -->
+                    </div>
+                    <div class="mt-6 text-sm text-gray-400 text-right" id="last-updated">
+                        Last updated: --
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="chart-box">
-        <canvas id="tempChart"></canvas>
-      </div>
-    </div>
+    </main>
 
-    <div class="right-panel">
-      <h3>🟢 Online Sensors</h3>
-      <div id="sensorCards"></div>
-    </div>
-  </div>
+    <footer class="py-4 text-center text-gray-400 text-sm">
+        <p>&copy; 2024 Tempro Dashboard. All rights reserved.</p>
+    </footer>
 
-  <script>
-    const mqttBroker = "wss://broker.hivemq.com:8884/mqtt";
-    const client = mqtt.connect(mqttBroker);
+    <script>
+        // --- MQTT Client Configuration ---
+        const mqttServer = "broker.hivemq.com";
+        const mqttPort = 8884; // Using wss:// protocol for secure WebSocket connection
+        const mqttClientId = "web-client-" + Math.random().toString(16).substr(2, 8);
+        const units = ['unit-1', 'unit-2', 'unit-3', 'unit-4'];
+        
+        let client;
 
-    let sensorData = {};
-    let lastSeen = {};
+        // Data storage for live updates and the graph
+        const sensorData = {
+            'unit-1': { temp: 0, humidity: 0, status: 'Offline' },
+            'unit-2': { temp: 0, humidity: 0, status: 'Offline' },
+            'unit-3': { temp: 0, humidity: 0, status: 'Offline' },
+            'unit-4': { temp: 0, humidity: 0, status: 'Offline' }
+        };
 
-    const ctx = document.getElementById("tempChart").getContext("2d");
-    const chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: [],
-        datasets: [{
-          label: "Temperature (°C)",
-          data: [],
-          backgroundColor: "rgba(59,130,246,0.2)",
-          borderColor: "#3b82f6",
-          borderWidth: 2,
-          pointBackgroundColor: "#3b82f6",
-          pointRadius: 4,
-          tension: 0.4,
-          fill: true
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { labels: { color: getComputedStyle(document.body).getPropertyValue('--text') } }
-        },
-        scales: {
-          y: {
-            min: 20,
-            max: 40,
-            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-muted') },
-            grid: { color: '#cbd5e1' },
-            title: {
-              display: true,
-              text: "Temperature (°C)",
-              color: getComputedStyle(document.body).getPropertyValue('--text-muted')
+        // --- Chart.js Configuration ---
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const tempChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: units.map(u => u.split('-').join(' ')),
+                datasets: [{
+                    label: 'Live Temperature',
+                    data: [0, 0, 0, 0],
+                    fill: 'start',
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)', // blue-500 with alpha
+                    borderColor: '#3b82f6', // blue-500
+                    borderWidth: 2,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#3b82f6',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'white'
+                        }
+                    },
+                    y: {
+                        beginAtZero: false,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'white'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                elements: {
+                    line: {
+                        cubicInterpolationMode: 'monotone'
+                    }
+                }
             }
-          },
-          x: {
-            ticks: { color: getComputedStyle(document.body).getPropertyValue('--text-muted') },
-            grid: { color: '#cbd5e1' },
-            title: {
-              display: true,
-              text: "Sensor ID",
-              color: getComputedStyle(document.body).getPropertyValue('--text-muted')
+        });
+
+        // --- UI Update Functions ---
+        function updateUI() {
+            updateOnlineSensorsList();
+            updateChart();
+            updateLastUpdatedTime();
+        }
+
+        function updateOnlineSensorsList() {
+            const list = document.getElementById('online-sensors-list');
+            list.innerHTML = '';
+            units.forEach(unit => {
+                const data = sensorData[unit];
+                const isOnline = data.status === 'Online';
+                const card = `
+                    <div class="bg-gray-700 p-4 rounded-xl flex justify-between items-center transition-transform duration-200 hover:scale-105 ${isOnline ? 'border-l-4 border-green-500' : 'border-l-4 border-red-500'}">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2 ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}"></div>
+                            <span class="font-semibold">${unit.split('-').join(' ')}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-green-400 font-medium">${isOnline ? 'Online' : 'Offline'}</span>
+                            <div class="text-sm">
+                                <span class="text-gray-200">${data.temp.toFixed(1)}°C</span>
+                                ${isOnline ? `<span class="text-green-400 pl-1">+${(data.humidity/10).toFixed(1)}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                list.innerHTML += card;
+            });
+        }
+
+        function updateChart() {
+            const temps = units.map(unit => sensorData[unit].temp);
+            tempChart.data.datasets[0].data = temps;
+            tempChart.update();
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('last-updated').textContent = `Last updated: ${dateString} - ${timeString}`;
+        }
+
+        // --- MQTT Connection & Message Handling ---
+        function connectMQTT() {
+            console.log("Connecting to MQTT broker...");
+            client = new Paho.Client(mqttServer, Number(mqttPort), mqttClientId);
+
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+
+            client.connect({
+                useSSL: true,
+                onSuccess: onConnect,
+                onFailure: onFailure
+            });
+        }
+
+        function onConnect() {
+            console.log("Connected to MQTT broker.");
+            // Subscribe to all temperature and humidity topics for all units
+            units.forEach(unit => {
+                const mqttUnit = unit.split('-').join('');
+                client.subscribe(`tempro/${mqttUnit}/temp`);
+                client.subscribe(`tempro/${mqttUnit}/humidity`);
+            });
+        }
+
+        function onFailure(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connection failed: " + responseObject.errorMessage);
+                setTimeout(connectMQTT, 5000); // Retry connection
             }
-          }
         }
-      }
-    });
 
-    function updateChart() {
-      const keys = Object.keys(sensorData).sort();
-      chart.data.labels = keys;
-      const now = Date.now();
-      const values = keys.filter(k => now - lastSeen[k] <= 60000).map(k => sensorData[k]);
-      chart.data.datasets[0].data = values;
-      chart.update();
-
-      if (values.length) {
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
-        document.querySelector("#meanCard b").innerText = mean.toFixed(1) + " °C";
-
-        const sorted = [...values].sort((a, b) => a - b);
-        const median = sorted.length % 2 === 0
-          ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-          : sorted[Math.floor(sorted.length / 2)];
-        document.querySelector("#medianCard b").innerText = median.toFixed(1) + " °C";
-
-        let status = mean > 32 ? "High" : mean > 29 ? "Medium" : "Low";
-        document.getElementById("statusLevel").innerText = status;
-      }
-    }
-
-    function updateSensorCards() {
-      const now = Date.now();
-      const container = document.getElementById("sensorCards");
-      container.innerHTML = "";
-      Object.keys(sensorData).forEach(sensorId => {
-        const age = Math.floor((now - lastSeen[sensorId]) / 1000);
-        if (age <= 60) {
-          const card = document.createElement("div");
-          card.className = "sensor-card";
-          card.innerHTML = `
-            <div class="sensor-id">Sensor: ${sensorId}</div>
-            <div>Temperature: <b>${sensorData[sensorId].toFixed(1)} °C</b></div>
-            <div>Last seen: ${age}s ago</div>
-          `;
-          container.appendChild(card);
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Connection lost: " + responseObject.errorMessage);
+                units.forEach(unit => {
+                    sensorData[unit].status = 'Offline';
+                });
+                updateUI();
+                setTimeout(connectMQTT, 5000); // Attempt to reconnect
+            }
         }
-      });
-    }
 
-    client.on("connect", () => {
-      document.getElementById("mqtt-status").innerText = "MQTT: Connected";
-      document.getElementById("mqtt-status").classList.remove("disconnected");
-      document.getElementById("mqtt-status").classList.add("connected");
-      client.subscribe("tempro/+/temperature");
-    });
+        function onMessageArrived(message) {
+            const topic = message.destinationName;
+            const payload = message.payloadString;
+            const [project, unitId, type] = topic.split('/');
+            
+            if (unitId && type) {
+                const internalUnitName = `unit-${unitId.slice(-1)}`;
+                const value = parseFloat(payload);
 
-    client.on("message", (topic, message) => {
-      const parts = topic.split("/");
-      const sensorId = parts[1];
-      const temp = parseFloat(message.toString());
-      if (!isNaN(temp)) {
-        sensorData[sensorId] = temp;
-        lastSeen[sensorId] = Date.now();
-        updateChart();
-      }
-    });
+                if (!isNaN(value)) {
+                    if (type === 'temp') {
+                        sensorData[internalUnitName].temp = value;
+                    } else if (type === 'humidity') {
+                        sensorData[internalUnitName].humidity = value;
+                    }
+                    sensorData[internalUnitName].status = 'Online';
+                    updateUI();
+                }
+            }
+        }
 
-    client.on("offline", () => {
-      document.getElementById("mqtt-status").innerText = "MQTT: Offline";
-      document.getElementById("mqtt-status").classList.add("disconnected");
-    });
-
-    setInterval(updateSensorCards, 1000);
-
-    function toggleTheme() {
-      document.body.classList.toggle("light");
-      chart.options.plugins.legend.labels.color = getComputedStyle(document.body).getPropertyValue('--text');
-      chart.options.scales.x.ticks.color = getComputedStyle(document.body).getPropertyValue('--text-muted');
-      chart.options.scales.x.title.color = getComputedStyle(document.body).getPropertyValue('--text-muted');
-      chart.options.scales.y.ticks.color = getComputedStyle(document.body).getPropertyValue('--text-muted');
-      chart.options.scales.y.title.color = getComputedStyle(document.body).getPropertyValue('--text-muted');
-      chart.update();
-    }
-  </script>
+        // Initialize the app
+        window.onload = function() {
+            connectMQTT();
+        }
+    </script>
 </body>
 </html>
